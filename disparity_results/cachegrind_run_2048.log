@@ -1,0 +1,29 @@
+==1138476== Cachegrind, a high-precision tracing profiler
+==1138476== Copyright (C) 2002-2017, and GNU GPL'd, by Nicholas Nethercote et al.
+==1138476== Using Valgrind-3.22.0 and LibVEX; rerun with -h for copyright info
+==1138476== Command: ./disparity .
+==1138476== 
+--1138476-- warning: L3 cache found, using its data for the LL simulation.
+==1138476== brk segment overflow in thread #1: can't grow to 0x4845000
+==1138476== (see section Limitations in user manual)
+==1138476== NOTE: further instances of this message will not be shown
+Input size		- (1920x1080)
+Verification		- Successful
+Cycles elapsed		- 162355441798
+
+==1138476== 
+==1138476== I refs:        10,706,139,165
+==1138476== I1  misses:             1,855
+==1138476== LLi misses:             1,855
+==1138476== I1  miss rate:           0.00%
+==1138476== LLi miss rate:           0.00%
+==1138476== 
+==1138476== D refs:         4,705,952,282  (2,716,980,030 rd   + 1,988,972,252 wr)
+==1138476== D1  misses:       420,949,199  (  251,328,159 rd   +   169,621,040 wr)
+==1138476== LLd misses:       420,949,188  (  251,328,159 rd   +   169,621,029 wr)
+==1138476== D1  miss rate:            8.9% (          9.3%     +           8.5%  )
+==1138476== LLd miss rate:            8.9% (          9.3%     +           8.5%  )
+==1138476== 
+==1138476== LL refs:          420,951,054  (  251,330,014 rd   +   169,621,040 wr)
+==1138476== LL misses:        420,951,043  (  251,330,014 rd   +   169,621,029 wr)
+==1138476== LL miss rate:             2.7% (          1.9%     +           8.5%  )
