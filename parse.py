@@ -105,7 +105,7 @@ for benchmark in ['pca', 'sphinx', 'disparity']:
     print(benchmark)
     cache_sizes: Iterable[int] = profiles[benchmark].keys()
     for size in sorted(cache_sizes):
-        print(f"cache size: {size}\tLL misses: {profiles[benchmark][size].LL_misses}")
+        print(f"cache size: {str(size).ljust(10)}\tLL misses: {str(profiles[benchmark][size].LL_misses).ljust(12)}")
     print()
 
 
