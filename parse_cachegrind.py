@@ -1,10 +1,12 @@
 #!/usr/bin/python3
 import os
-from typing import Iterable
+from typing import Iterable, Mapping
 from dataclasses import dataclass
+from collections import OrderedDict
 
 
-VALGRIND_RESULT_FOLDERS = ["pca_results/", "sphinx_results/", "disparity_results/"]
+VALGRIND_RESULT_FOLDERS = tuple(sorted(("pca_results/", "sphinx_results/", "disparity_results/")))
+VALGRIND_RESULT_NAMES = tuple(folder.split('_')[0] for folder in VALGRIND_RESULT_FOLDERS)
 
 
 @dataclass
@@ -17,6 +19,18 @@ class CacheGrindResult:
     LLd_misses: int      # Level 1 data cache misses
     LL_refs: int         # Level 2 references
     LL_misses: int       # Level 2 misses
+
+
+    def get_L1_hits(self) -> int:
+        l1_i_hits = self.I_refs - self.I1_misses - self.LLi_misses
+        l1_d_hits = self.D_refs - self.D1_misses - self.LLd_misses
+        return l1_i_hits + l1_d_hits
+
+    def get_L1_misses(self) -> int:
+        return self.I1_misses + self.D1_misses
+
+    def get_L2_misses(self) -> int:
+        return self.LLi_misses + self.LLd_misses
 
 
     def __str__(self):
@@ -32,7 +46,7 @@ class CacheGrindResult:
                 f")")
 
 
-def get_profiles() -> dict[str, dict[int, CacheGrindResult]]:
+def get_profiles() -> OrderedDict[str, OrderedDict[int, CacheGrindResult]]:
 
     def get_statistics(folder: str):
         for file in os.listdir(folder):
@@ -94,20 +108,24 @@ def get_profiles() -> dict[str, dict[int, CacheGrindResult]]:
 
             cache_grind_result = CacheGrindResult(I_refs, D_refs, I1_misses, LLi_misses, D1_misses, LLd_misses, LL_refs, LL_misses)
             yield (cache_size, cache_grind_result)
-            #profiles[benchmark_name][cache_size] = cache_grind_result
 
-    def enumerate_profiles(folders: list[str]):
+    def enumerate_profiles(folders: Iterable[str]):
         for folder in folders:
             benchmark_name = folder.split('_')[0]
             # Read all result files
             statistics_from_folder = get_statistics(folder)
-            statistics_set = { size: result for size, result in statistics_from_folder }
+            statistics_set: OrderedDict[int, CacheGrindResult] = OrderedDict()
+            for size, result in statistics_from_folder:
+                statistics_set[size] = result
             yield (benchmark_name, statistics_set)
 
-    return { name: profile for name, profile in enumerate_profiles(VALGRIND_RESULT_FOLDERS) }
+    result: OrderedDict[str, OrderedDict[int, CacheGrindResult]] = OrderedDict()
+    for name, profile in enumerate_profiles(VALGRIND_RESULT_FOLDERS):
+        result[name] = profile
+    return result
 
 
-def print_profiles(profiles: dict[str, dict[int, CacheGrindResult]]):
+def print_profiles(profiles: Mapping[str, Mapping[int, CacheGrindResult]]):
     benchmark_names = profiles.keys()
     for benchmark in benchmark_names:
         print(benchmark)
