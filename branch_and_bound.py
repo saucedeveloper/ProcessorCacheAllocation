@@ -3,6 +3,7 @@ from __future__ import annotations
 # from abc import abstractmethod
 from typing import Sequence, Callable, Iterable
 from dataclasses import dataclass
+from solving_conditions import utilization_bound
 import heapq
 
 
@@ -42,12 +43,6 @@ import heapq
 #     index = binary_search(collection, item)
 #     collection.insert(index, item)
 #     return index
-
-
-"""Sufficient schedulability test bound using Rate Monotonic"""
-def utilization_bound(n: int):
-    assert(0 < n)
-    return n * (2 ** (1 / n) - 1)
 
 
 def extend_iterable[T](iterable: Iterable[T], item: T):
@@ -97,15 +92,18 @@ def is_schedulable(
         cache_sizes: Sequence[int],
         util_bound: float,
         periods: Sequence[float],
-        get_wcet: Callable[[int, int], float]) -> bool:
-    return all(512 <= cache_sizes[alloc_i] for alloc_i in allocations)
-    utilization_sum = 0
-    for i, alloc_i in enumerate(allocations):
-        j = alloc_i
-        utilization_sum += get_wcet(i, j) / periods[i]
-        if util_bound < utilization_sum:
-            return False
-    return True
+        get_wcet: Callable[[int, int], float]) -> tuple[bool, float]:
+    # return all(512 <= cache_sizes[alloc_i] for alloc_i in allocations)
+    utilization_sum = sum(get_wcet(i, j) / periods[i] for i, j in enumerate(allocations))
+    return (utilization_sum <= util_bound, utilization_sum)
+    # utilization_sum = 0
+    # for i, alloc_i in enumerate(allocations):
+    #     j = alloc_i
+    #     processor_utilization = get_wcet(i, j) / periods[i]
+    #     utilization_sum += processor_utilization
+    #     if util_bound < utilization_sum:
+    #         return False
+    # return True
 
 
 """Evaluate the best case total cache partition
@@ -121,10 +119,13 @@ that ensures all tasks are schedulable"""
 def branch_and_bound(
         cache_sizes: Sequence[int],
         periods: Sequence[float],
-        get_wcet: Callable[[int, int], float]):
+        get_wcet: Callable[[int, int], float],
+        initial_guess: tuple[int, ...] | None = None,
+        max_iter: int = 1000):
 
     def print_ind(message: str, end: str = "\n", p: int = 0):
         print(" " * (p * 4) + message, end=end)
+        pass
 
     k = len(cache_sizes)
     n = len(periods)
@@ -132,6 +133,10 @@ def branch_and_bound(
     assert(0 < n)
 
     util_bound = utilization_bound(n)
+
+    assert(initial_guess is None or (len(initial_guess) == n))
+    assert(initial_guess is None or is_schedulable(initial_guess, cache_sizes, util_bound, periods, get_wcet)[0])
+
     # min_cache_size = cache_sizes[0]
     max_cache_size = cache_sizes[-1]
 
@@ -147,11 +152,20 @@ def branch_and_bound(
     exploration_queue: list[CacheAllocation] = []
     heapq.heappush(exploration_queue, initial_allocation)
     print_ind(f"Pushing {initial_allocation.to_str(cache_sizes)}")
-    best_allocation: CacheAllocation | None = None
+
+    best_allocation: CacheAllocation | None
+    if initial_guess is None:
+        best_allocation = None
+    else:
+        best_case_cache_size = best_case_allocated_cache(initial_guess, cache_sizes, n)
+        best_allocation = CacheAllocation(initial_guess, best_case_cache_size)
+        print(f"initial_guess: {best_allocation.to_str(cache_sizes)}")
+
     iter_count = 0
+    analysed_exhaustive_count = 0
 
     while 0 < len(exploration_queue):
-        if 500 < iter_count:
+        if max_iter <= iter_count:
             raise ValueError(f"Not terminating ({len(exploration_queue)})")
         iter_count += 1
         next_best_node = heapq.heappop(exploration_queue)
@@ -161,12 +175,13 @@ def branch_and_bound(
         if cache_of_exhaustive is not None:
             print_ind(", exhaustive", end="")
             new_best = better_than_best(best_allocation, cache_of_exhaustive)
-            schedulable = is_schedulable(next_best_node.association, cache_sizes, util_bound, periods, get_wcet)
+            schedulable, utilization = is_schedulable(next_best_node.association, cache_sizes, util_bound, periods, get_wcet)
             if new_best:
-                print_ind(f", new best, {'schedulable' if schedulable else 'not schedulable'}", end="")
+                print_ind(f", new best, {'schedulable' if schedulable else f'not_schedulable ({utilization / util_bound:.2f})'}", end="")
             if new_best and schedulable:
                 best_allocation = next_best_node
             print_ind("")
+            analysed_exhaustive_count += 1
         else:
             print_ind(", non-exhaustive")
             next_i = len(next_best_node.association)
@@ -181,5 +196,5 @@ def branch_and_bound(
                     heapq.heappush(exploration_queue, next_node)
                     print_ind(f"Pushing[{j=}] {next_node.to_str(cache_sizes)}", p=p + 1)
 
-    print(f"{iter_count=}")
+    print_ind(f"{iter_count=}, {analysed_exhaustive_count=}")
     return best_allocation
