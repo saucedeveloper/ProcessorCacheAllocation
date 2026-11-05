@@ -8,28 +8,38 @@ from collections import OrderedDict
 VALGRIND_RESULT_FOLDERS = tuple(sorted(("pca_results/", "sphinx_results/", "disparity_results/")))
 VALGRIND_RESULT_NAMES = tuple(folder.split('_')[0] for folder in VALGRIND_RESULT_FOLDERS)
 
-
 @dataclass
 class CacheGrindResult:
-    I_refs: int          # Instruction references
-    D_refs: int          # Data references
-    I1_misses: int       # Instruction cache level 1 misses
-    LLi_misses: int      # Level 1 instruction cache misses
-    D1_misses: int       # Data cache level 1 misses
-    LLd_misses: int      # Level 1 data cache misses
-    LL_refs: int         # Level 2 references
-    LL_misses: int       # Level 2 misses
+    I_refs: int      # Instruction references
+    D_refs: int      # Data references
+    I1_misses: int   # Instruction cache level 1 misses
+    LLi_misses: int  # Level 1 instruction cache misses
+    D1_misses: int   # Data cache level 1 misses
+    LLd_misses: int  # Level 1 data cache misses
+    LL_refs: int     # Level 2 references
+    LL_misses: int   # Level 2 misses
 
 
     def get_L1_hits(self) -> int:
-        l1_i_hits = self.I_refs - self.I1_misses - self.LLi_misses
-        l1_d_hits = self.D_refs - self.D1_misses - self.LLd_misses
-        return l1_i_hits + l1_d_hits
+        # l1_i_hits = self.I_refs - self.I1_misses - self.LLi_misses
+        # assert(self.LLi_misses <= self.I1_misses)
+        # l1_d_hits = self.D_refs - self.D1_misses - self.LLd_misses
+        # assert(self.LLd_misses <= self.D1_misses)
+        refs = self.I_refs + self.D_refs
+        assert(0 <= refs - self.get_L1_misses() - self.get_L2_misses())
+        return refs - self.get_L1_misses() - self.get_L2_misses()
 
     def get_L1_misses(self) -> int:
-        return self.I1_misses + self.D1_misses
+        assert(self.I1_misses + self.D1_misses == self.LL_refs)
+        l1_i_misses = self.I1_misses - self.LLi_misses
+        d1_i_misses = self.D1_misses - self.LLd_misses
+        assert(0 <= l1_i_misses)
+        assert(0 <= d1_i_misses)
+        assert(0 <= self.LL_refs)
+        return self.LL_refs - self.get_L2_misses()
 
     def get_L2_misses(self) -> int:
+        assert(0 <= self.LLi_misses + self.LLd_misses)
         return self.LLi_misses + self.LLd_misses
 
 
