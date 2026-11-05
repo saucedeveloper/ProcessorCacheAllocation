@@ -1,4 +1,5 @@
 import parse_cachegrind
+from typing import Callable, Iterable, Sequence
 from cortex_a53 import get_total_cycles
 
 
@@ -36,3 +37,22 @@ def get_wcet(i: int, j: int) -> float:
     profile = cachegrind_profiles[task_name]
     cache_size = CACHE_PARTITION_SIZES[j]
     return get_total_cycles(profile[cache_size])
+
+
+def is_schedulable(
+        allocations: Iterable[int],
+        cache_sizes: Sequence[int],
+        util_bound: float,
+        periods: Sequence[float],
+        get_wcet: Callable[[int, int], float]) -> tuple[bool, float]:
+    # return all(512 <= cache_sizes[alloc_i] for alloc_i in allocations)
+    utilization_sum = sum(get_wcet(i, j) / periods[i] for i, j in enumerate(allocations))
+    return (utilization_sum <= util_bound, utilization_sum)
+    # utilization_sum = 0
+    # for i, alloc_i in enumerate(allocations):
+    #     j = alloc_i
+    #     processor_utilization = get_wcet(i, j) / periods[i]
+    #     utilization_sum += processor_utilization
+    #     if util_bound < utilization_sum:
+    #         return False
+    # return True

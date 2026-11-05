@@ -3,46 +3,8 @@ from __future__ import annotations
 # from abc import abstractmethod
 from typing import Sequence, Callable, Iterable
 from dataclasses import dataclass
-from solving_conditions import utilization_bound
+from solving_conditions import utilization_bound, is_schedulable
 import heapq
-
-
-# class Comparable(Protocol):
-#     """Protocol for annotating comparable types."""
-
-#     @abstractmethod
-#     def __lt__(self: Comparable, other: Comparable, /) -> bool:
-#         ...
-
-#     @abstractmethod
-#     def __gt__(self: Comparable, other: Comparable, /) -> bool:
-#         ...
-
-
-# def binary_search(collection: Sequence[int], item: int) -> int:
-#     if len(collection) == 0:
-#         return 0
-
-#     low_index = 0
-#     high_index = len(collection)
-#     while low_index < high_index:
-#         mid_index = (low_index + high_index) // 2
-#         mid_item = collection[mid_index]
-#         if item < mid_item:
-#             high_index = mid_index
-#         elif mid_item < item:
-#             low_index = mid_index
-#         else:
-#             return mid_index
-
-#     assert(low_index == high_index)
-#     return low_index
-
-
-# def insert_sorted(collection: list[int], item: int) -> int:
-#     index = binary_search(collection, item)
-#     collection.insert(index, item)
-#     return index
 
 
 def extend_iterable[T](iterable: Iterable[T], item: T):
@@ -85,25 +47,6 @@ class CacheAllocation:
         if isinstance(other, CacheAllocation):
             return self.min_allocated_cache.__eq__(other.min_allocated_cache)
         return False
-
-
-def is_schedulable(
-        allocations: Iterable[int],
-        cache_sizes: Sequence[int],
-        util_bound: float,
-        periods: Sequence[float],
-        get_wcet: Callable[[int, int], float]) -> tuple[bool, float]:
-    # return all(512 <= cache_sizes[alloc_i] for alloc_i in allocations)
-    utilization_sum = sum(get_wcet(i, j) / periods[i] for i, j in enumerate(allocations))
-    return (utilization_sum <= util_bound, utilization_sum)
-    # utilization_sum = 0
-    # for i, alloc_i in enumerate(allocations):
-    #     j = alloc_i
-    #     processor_utilization = get_wcet(i, j) / periods[i]
-    #     utilization_sum += processor_utilization
-    #     if util_bound < utilization_sum:
-    #         return False
-    # return True
 
 
 """Evaluate the best case total cache partition
