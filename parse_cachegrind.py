@@ -1,4 +1,7 @@
 #!/usr/bin/python3
+
+"""Parser for valgrind log files"""
+
 import os
 from typing import Iterable, Mapping
 from dataclasses import dataclass
@@ -7,6 +10,7 @@ from collections import OrderedDict
 
 VALGRIND_RESULT_FOLDERS = tuple(sorted(("pca_results/", "sphinx_results/", "disparity_results/")))
 VALGRIND_RESULT_NAMES = tuple(folder.split('_')[0] for folder in VALGRIND_RESULT_FOLDERS)
+
 
 @dataclass
 class CacheGrindResult:
@@ -20,14 +24,8 @@ class CacheGrindResult:
     LL_misses: int   # Level 2 misses
 
 
-    def get_L1_hits(self) -> int:
-        # l1_i_hits = self.I_refs - self.I1_misses - self.LLi_misses
-        # assert(self.LLi_misses <= self.I1_misses)
-        # l1_d_hits = self.D_refs - self.D1_misses - self.LLd_misses
-        # assert(self.LLd_misses <= self.D1_misses)
-        refs = self.I_refs + self.D_refs
-        assert(0 <= refs - self.get_L1_misses() - self.get_L2_misses())
-        return refs - self.get_L1_misses() - self.get_L2_misses()
+    def get_L1d_hits(self) -> int:
+        return self.D_refs
 
     def get_L1_misses(self) -> int:
         assert(self.I1_misses + self.D1_misses == self.LL_refs)
@@ -36,11 +34,10 @@ class CacheGrindResult:
         assert(0 <= l1_i_misses)
         assert(0 <= d1_i_misses)
         assert(0 <= self.LL_refs)
-        return self.LL_refs - self.get_L2_misses()
+        return self.LL_refs# - self.get_L2_misses()
 
     def get_L2_misses(self) -> int:
-        assert(0 <= self.LLi_misses + self.LLd_misses)
-        return self.LLi_misses + self.LLd_misses
+        return self.LL_misses
 
 
     def __str__(self):
@@ -56,6 +53,7 @@ class CacheGrindResult:
                 f")")
 
 
+"""Get benchmark profiles from log files"""
 def get_profiles() -> OrderedDict[str, OrderedDict[int, CacheGrindResult]]:
 
     def get_statistics(folder: str):
@@ -135,6 +133,7 @@ def get_profiles() -> OrderedDict[str, OrderedDict[int, CacheGrindResult]]:
     return result
 
 
+"""Print `profiles`"""
 def print_profiles(profiles: Mapping[str, Mapping[int, CacheGrindResult]]):
     benchmark_names = profiles.keys()
     for benchmark in benchmark_names:
