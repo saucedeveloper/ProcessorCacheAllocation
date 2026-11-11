@@ -1,9 +1,14 @@
-from branch_and_bound import is_schedulable, best_case_allocated_cache, CacheAllocation
+"""Implementation of an exhaustive brute force
+algorithm applied to the cache partitioning problem"""
+
+from branch_and_bound import best_case_allocated_cache, CacheAllocation
 from typing import Sequence, Callable
-from solving_conditions import utilization_bound, CACHE_PARTITION_SIZES, periods, get_wcet
+from solving_conditions import is_schedulable, utilization_bound, CACHE_PARTITION_SIZES, periods, get_wcet
 import sys
 
 
+"""Iterates over every integer combination
+of n values with maximum index"""
 class CombinationIterator:
     def __init__(self, value_count: int, value_max: int) -> None:
         self.value_count = value_count
@@ -34,6 +39,7 @@ class CombinationIterator:
         return None
 
 
+"""Gets the best schedulable cache allocation using brute force"""
 def best_brute_force(
         cache_sizes: Sequence[int],
         periods: Sequence[float],
@@ -49,17 +55,19 @@ def best_brute_force(
     while True:
         empirical_iter_count += 1
         current_cache_size = best_case_allocated_cache(solution_iterator.current, cache_sizes, n)
-        schedulable = is_schedulable(solution_iterator.current, cache_sizes, util_bound, periods, get_wcet)[0]
+        utilization_sum = [-1.0]
+        schedulable = is_schedulable(solution_iterator.current, util_bound, periods, get_wcet, utilization_sum)
         if schedulable:
             schedulable_count += 1
         if schedulable and ((best_solution is None) or (current_cache_size < best_solution.min_allocated_cache)):
-            best_solution = CacheAllocation(tuple(solution_iterator.current), current_cache_size)
+            best_solution = CacheAllocation(tuple(solution_iterator.current), current_cache_size, utilization_sum[0])
         if not solution_iterator.next():
             break
 
     return (best_solution, empirical_iter_count, schedulable_count)
 
 
+"""Generates all cache allocations possible"""
 def all_brute_force(
         cache_sizes: Sequence[int],
         periods: Sequence[float],
@@ -71,12 +79,14 @@ def all_brute_force(
     solution_iterator = CombinationIterator(value_count=n, value_max=k)
     while True:
         current_cache_size = best_case_allocated_cache(solution_iterator.current, cache_sizes, n)
-        schedulable = is_schedulable(solution_iterator.current, cache_sizes, util_bound, periods, get_wcet)[0]
-        yield (CacheAllocation(tuple(solution_iterator.current), current_cache_size), schedulable)
+        utilization_sum = [-1.0]
+        schedulable = is_schedulable(solution_iterator.current, util_bound, periods, get_wcet, utilization_sum)
+        yield (CacheAllocation(tuple(solution_iterator.current), current_cache_size, utilization_sum[0]), schedulable)
         if not solution_iterator.next():
             break
 
 
+"""Writes all cache allocations possible to `destination`"""
 def log_brute_force(
         cache_sizes: Sequence[int],
         periods: Sequence[float],
@@ -88,6 +98,7 @@ def log_brute_force(
             file.write(f"{str(solution.association).replace(' ', '')}>{solution.min_allocated_cache}!{int(schedulable)}\n")
 
 
+"""Writes all cache allocations possible to `sys.argv[1]`"""
 def main():
     if 2 <= len(sys.argv):
         destination = sys.argv[1]
