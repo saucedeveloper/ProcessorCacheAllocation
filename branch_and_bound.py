@@ -1,18 +1,23 @@
+"""Implementation of the branch and bound algorithm
+applied to the cache partitioning problem"""
+
 from __future__ import annotations
 
 # from abc import abstractmethod
 from typing import Sequence, Callable, Iterable
 from dataclasses import dataclass
-from solving_conditions import utilization_bound, is_schedulable
+from solving_conditions import utilization_bound, get_utilization_ratio
 import heapq
 
 
+"""Extend `iterable` by `item`"""
 def extend_iterable[T](iterable: Iterable[T], item: T):
     for x in iterable:
         yield x
     yield item
 
 
+"""Sum elements of `iterable` while counting them"""
 def sum_counted(iterable: Iterable[int]):
     total_sum = 0
     count = 0
@@ -22,11 +27,15 @@ def sum_counted(iterable: Iterable[int]):
     return (total_sum, count)
 
 
+"""Partial or exhaustive allocation of cache
+partition sizes, with best case allocated
+cache size (`min_allocated_cache`) and processor
+utilization (`utilization_sum`)"""
 @dataclass
 class CacheAllocation:
-    association: tuple[int, ...] #dict[int, int]
+    association: tuple[int, ...]
     min_allocated_cache: int
-    # max_allocated_cache: int
+    utilization_sum: float
 
     def exhaustive_association(self, n: int) -> int | None:
         if len(self.association) != n:
@@ -35,7 +44,7 @@ class CacheAllocation:
 
     def to_str(self, cache_sizes: Sequence[int]):
         cache = ", ".join(f"#{i}={cache_sizes[c]}" for i, c in enumerate(self.association))
-        return f"{{{cache}}}, min={self.min_allocated_cache}"
+        return f"{{{cache}}}, min_cache={self.min_allocated_cache}, util={self.utilization_sum:.4f}"
 
     def __lt__(self, other: CacheAllocation):
         return self.min_allocated_cache.__lt__(other.min_allocated_cache)
@@ -57,6 +66,22 @@ def best_case_allocated_cache(allocations: Iterable[int], cache_sizes: Sequence[
     return size_of_allocated + min_size_of_non_allocated
 
 
+"""Get the minimum index between `j_min` and
+`j_max` such that `predicate` is true"""
+def get_min_index_where(j_min: int, j_max: int, predicate: Callable[[int], tuple[bool, float]], non_matching: set[int]):
+    best_result = None
+    while j_min < j_max:
+        j_mid = (j_min + j_max) // 2
+        predicate_result = predicate(j_mid)
+        if predicate_result[0]:
+            best_result = (j_mid, predicate_result[1])
+            j_max = j_mid
+        else:
+            non_matching.add(j_mid)
+            j_min = j_mid + 1
+    return best_result
+
+
 """Find the optimal cache partition allocation
 that ensures all tasks are schedulable"""
 def branch_and_bound(
@@ -65,6 +90,15 @@ def branch_and_bound(
         get_wcet: Callable[[int, int], float],
         initial_guess: tuple[int, ...] | None = None,
         max_iter: int = 1000):
+
+    wcet_cache: dict[tuple[int, int], float] = {}
+    def get_cached_wcet(i: int, j: int):
+        existing = wcet_cache.get((i, j))
+        if existing is not None:
+            return existing
+        new = get_wcet(i, j)
+        wcet_cache[(i, j)] = new
+        return new
 
     def print_ind(message: str, end: str = "\n", p: int = 0):
         print(" " * (p * 4) + message, end=end)
@@ -77,8 +111,16 @@ def branch_and_bound(
 
     util_bound = utilization_bound(n)
 
+    def is_schedulable_allocation(allocation: CacheAllocation):
+        return allocation.utilization_sum <= util_bound
+
+    def is_partially_schedulable(utilization_sum: float, last_i: int, last_j: int) -> tuple[bool, float]:
+        additional_ratio = get_utilization_ratio(periods, get_cached_wcet, last_i, last_j)
+        new_sum = utilization_sum + additional_ratio
+        return (new_sum <= util_bound, new_sum)
+
     assert(initial_guess is None or (len(initial_guess) == n))
-    assert(initial_guess is None or is_schedulable(initial_guess, cache_sizes, util_bound, periods, get_wcet)[0])
+    # assert(initial_guess is None or is_schedulable(initial_guess, cache_sizes, util_bound, periods, get_cached_wcet)[0])
 
     # min_cache_size = cache_sizes[0]
     max_cache_size = cache_sizes[-1]
@@ -89,9 +131,8 @@ def branch_and_bound(
         return cache_size < best_allocation.min_allocated_cache
 
     max_allocated_cache = n * max_cache_size
-    # min_allocated_cache = n * min_cache_size
     # The default allocation min cache size is the highest because it is partial (cannot be a solution)
-    initial_allocation: CacheAllocation = CacheAllocation((), max_allocated_cache)
+    initial_allocation: CacheAllocation = CacheAllocation((), max_allocated_cache, 0)
     exploration_queue: list[CacheAllocation] = []
     heapq.heappush(exploration_queue, initial_allocation)
     print_ind(f"Pushing {initial_allocation.to_str(cache_sizes)}")
@@ -101,7 +142,7 @@ def branch_and_bound(
         best_allocation = None
     else:
         best_case_cache_size = best_case_allocated_cache(initial_guess, cache_sizes, n)
-        best_allocation = CacheAllocation(initial_guess, best_case_cache_size)
+        best_allocation = CacheAllocation(initial_guess, best_case_cache_size, util_bound)
         print(f"initial_guess: {best_allocation.to_str(cache_sizes)}")
 
     iter_count = 0
@@ -117,11 +158,11 @@ def branch_and_bound(
         cache_of_exhaustive = next_best_node.exhaustive_association(n)
         if cache_of_exhaustive is not None:
             print_ind(", exhaustive", end="")
-            new_best = better_than_best(best_allocation, cache_of_exhaustive)
-            schedulable, utilization = is_schedulable(next_best_node.association, cache_sizes, util_bound, periods, get_wcet)
-            if new_best:
-                print_ind(f", new best, {'schedulable' if schedulable else f'not_schedulable ({utilization / util_bound:.2f})'}", end="")
-            if new_best and schedulable:
+            is_new_best = better_than_best(best_allocation, cache_of_exhaustive)
+            schedulable = is_schedulable_allocation(next_best_node)
+            if is_new_best:
+                print_ind(f", new best, {'schedulable' if schedulable else f'not_schedulable ({next_best_node.utilization_sum / util_bound:.2f})'}", end="")
+            if is_new_best and schedulable:
                 best_allocation = next_best_node
             print_ind("")
             analysed_exhaustive_count += 1
@@ -129,15 +170,33 @@ def branch_and_bound(
             print_ind(", non-exhaustive")
             next_i = len(next_best_node.association)
             assert(0 <= next_i < n)
-            for j in range(k):
-                inner_association = extend_iterable(next_best_node.association, j)
-                best_case_inner = best_case_allocated_cache(inner_association, cache_sizes, n)
-                if better_than_best(best_allocation, best_case_inner):
-                    # Reassign iterable as it has been consumed
-                    inner_association = extend_iterable(next_best_node.association, j)
-                    next_node = CacheAllocation(tuple(inner_association), best_case_inner)
+
+            def is_schedulable_for_j(j: int):
+                result = is_partially_schedulable(next_best_node.utilization_sum, next_i, j)
+                return result
+
+            j_min = 0
+            j_max = k
+            non_schedulable_js: set[int] = set()
+            min_schedulable_j = get_min_index_where(j_min, j_max, is_schedulable_for_j, non_schedulable_js)#(j_min, is_partially_schedulable(next_best_node.utilization_sum, next_i, j_min)[1])
+
+            if min_schedulable_j is None:
+                min_schedulable_j = (j_min, next_best_node.utilization_sum + get_utilization_ratio(periods, get_cached_wcet, next_i, j_min))
+                print_ind(f"No schedulable j found", p=p + 1)
+
+            min_sched_j, _new_utilization_sum = min_schedulable_j
+
+            for j in range(min_sched_j, j_max):
+                if j in non_schedulable_js:
+                    continue
+                # Generates iterable only consumable once
+                inner_association = lambda: extend_iterable(next_best_node.association, j)
+                best_case_inner = best_case_allocated_cache(inner_association(), cache_sizes, n)
+                schedulable, new_utilization_sum = is_partially_schedulable(next_best_node.utilization_sum, next_i, j)
+                if schedulable and better_than_best(best_allocation, best_case_inner):
+                    next_node = CacheAllocation(tuple(inner_association()), best_case_inner, new_utilization_sum)
                     heapq.heappush(exploration_queue, next_node)
                     print_ind(f"Pushing[{j=}] {next_node.to_str(cache_sizes)}", p=p + 1)
 
-    print_ind(f"{iter_count=}, {analysed_exhaustive_count=}")
+    print_ind(f"\nAnalysed {iter_count} nodes ({analysed_exhaustive_count} complete solutions)")
     return best_allocation
