@@ -1,10 +1,11 @@
+"""Main file for solving the cache partitioning
+problem through branch and bound and brute force"""
+
 from branch_and_bound import branch_and_bound
 from brute_force import best_brute_force
 
 from solving_conditions import is_schedulable, utilization_bound, CACHE_PARTITION_SIZES, periods
 import solving_conditions
-
-# pareto front with x = cache_size, y = processor utilization
 
 
 def main():
@@ -23,23 +24,25 @@ def main():
     def get_initial_guess():
         for j in range(len(CACHE_PARTITION_SIZES)):
             associations = tuple(j for _ in range(n))
-            if is_schedulable(associations, CACHE_PARTITION_SIZES, util_bound, periods, get_wcet)[0]:
+            if is_schedulable(associations, util_bound, periods, get_wcet):
                 return associations
         return None
 
-    initial_guess = None #get_initial_guess()
+    # initial_guess = get_initial_guess()
     # assert(initial_guess is not None)
-    best_allocation = branch_and_bound(CACHE_PARTITION_SIZES, periods, get_wcet, initial_guess, max_iter=10000)
+    wcet_count[0] = 0
+    best_allocation = branch_and_bound(CACHE_PARTITION_SIZES, periods, get_wcet, initial_guess=None, max_iter=10000)
+    bnb_wcet_count = wcet_count[0]
     assert(best_allocation is not None)
-    assert(is_schedulable(best_allocation.association, CACHE_PARTITION_SIZES, util_bound, periods, get_wcet)[0])
+    assert(is_schedulable(best_allocation.association, util_bound, periods, get_wcet))
 
+    print(f"best_allocation=({best_allocation.to_str(CACHE_PARTITION_SIZES)}), called wcet {bnb_wcet_count} times\n\n")
+    
     brute_force, brute_force_iter_count, schedulable_count = best_brute_force(CACHE_PARTITION_SIZES, periods, get_wcet)
     assert(brute_force is not None)
-    assert(is_schedulable(brute_force.association, CACHE_PARTITION_SIZES, util_bound, periods, get_wcet)[0])
+    assert(is_schedulable(brute_force.association, util_bound, periods, get_wcet))
 
-
-    print(f"wcet_count={wcet_count[0]}, best_allocation=({best_allocation.to_str(CACHE_PARTITION_SIZES)})\n\n")
-    print(f"brute_force=({brute_force.to_str(CACHE_PARTITION_SIZES)}), explored {brute_force_iter_count} ({schedulable_count=})\n\n")
+    print(f"brute_force=({brute_force.to_str(CACHE_PARTITION_SIZES)}), explored {brute_force_iter_count} combinations ({schedulable_count} schedulable)\n\n")
 
 
 if __name__ == "__main__":
