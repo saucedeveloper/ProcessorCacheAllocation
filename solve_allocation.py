@@ -27,8 +27,10 @@ def main():
         return None
 
     if 2 <= len(sys.argv) and sys.argv[1].lower() == "-p":
+        branch_and_bound.log_enable = True
         wcet_count[0] = 0
         pareto = pareto_front(CACHE_PARTITION_SIZES, periods, get_wcet, max_iter=10000)
+        pf_wcet_count = wcet_count[0]
         sorted_pareto = sorted(pareto, key=lambda p: p[1])
         cache_max = sorted_pareto[-1][1]
 
@@ -40,7 +42,7 @@ def main():
         def pareto_to_str(p: tuple[float, int]):
             return f"({p[1] / cache_scaling:.6f}, {p[0]:.6f})"
 
-        print(f"cache * {cache_scaling}")
+        print(f"cache * {cache_scaling}, wcet: {pf_wcet_count}")
         print("[" + ", ".join(pareto_to_str(p) for p in sorted_pareto) + "]")
     else:
         # initial_guess = get_initial_guess()
